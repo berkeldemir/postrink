@@ -393,7 +393,7 @@ class CartScreen(QWidget):
 			item_name_lbl.setStyleSheet("font-size: 28px;")
 			item_name_lbl.setAlignment(Qt.AlignLeft)
 
-			item_price_lbl = QLabel(f"{item['item_total']} TL")
+			item_price_lbl = QLabel(f"{item['item_total'] + item['item_discount_num']} TL")
 			item_price_lbl.setStyleSheet("font-size: 28px; font-weight: bold; min-width: 64px;")
 			item_price_lbl.setAlignment(Qt.AlignRight)
 
@@ -568,7 +568,7 @@ class CustomerCartScreen(QWidget):
 			item_name_lbl = QLabel(f"{item['item_name']}")
 			item_name_lbl.setStyleSheet("font-size: 48px;")
 
-			item_price_lbl = QLabel(f"{item['item_total']} TL")
+			item_price_lbl = QLabel(f"{item['item_total'] + item['item_discount_num']} TL")
 			item_price_lbl.setStyleSheet("font-size: 48px; font-weight: bold; min-width: 96px;")
 			item_price_lbl.setAlignment(Qt.AlignRight)
 

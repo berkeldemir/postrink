@@ -100,43 +100,45 @@ class DatabaseManager:
 
 	def add_item_to_cart(self, sale_id, item_id, item_count, item_discount_perc, item_discount_num):
 		try:
-			cursor_already_exist = self.conn.cursor()
-			cursor_already_exist.execute("""
-				SELECT ci.item_count,
-					ci.item_total,
-					i.item_price
+			cur = self.conn.cursor()
+			cur.execute("""
+				SELECT ci.item_count, ci.item_total, i.item_price
 				FROM cart_items ci
 				JOIN items i ON ci.item_id = i.item_id
-				WHERE ci.sale_id = ? AND ci.item_id = ?;
-			""", (sale_id, item_id, ))
-			already_exist = cursor_already_exist.fetchone()
-			if already_exist:
-				cursor_update_count = self.conn.cursor()
-				cursor_update_count.execute("""
+				WHERE ci.sale_id = ? AND ci.item_id = ?
+			""", (sale_id, item_id))
+			row = cur.fetchone()
+
+			if row:
+				new_count = row[0] + item_count
+				new_total = row[1] + (item_count * row[2])
+				cur.execute("""
 					UPDATE cart_items
 					SET item_count = ?,
 						item_total = ?
 					WHERE sale_id = ? AND item_id = ?
-				""", (already_exist[0] + item_count, (already_exist[1] + (item_count * already_exist[2])), sale_id, item_id, ))
+				""", (new_count, new_total, sale_id, item_id))
+				self.conn.commit()  # <-- missing before
 				return True
 
-			cursor_total = self.conn.cursor()
-			cursor_total.execute("""SELECT item_price FROM items WHERE item_id = ?""", (item_id, ))
-			item_price_tuple = cursor_total.fetchone()
-			if not item_price_tuple:
+			# insert path (unchanged)
+			cur.execute("""SELECT item_price FROM items WHERE item_id = ?""", (item_id,))
+			price_row = cur.fetchone()
+			if not price_row:
 				print(f"ERROR:   Item ID not found: {item_id}")
 				return False
-			self.item_total = item_price_tuple[0]
-			if (item_discount_perc != 0):
-				self.item_total = self.item_total / 100 * (100 - item_discount_perc)
-			if (item_discount_num != 0):
-				self.item_total = self.item_total - item_discount_num
-			
-			cursor = self.conn.cursor()
-			cursor.execute("""
+
+			base_price = price_row[0]
+			line_total = base_price
+			if item_discount_perc:
+				line_total = line_total * (100 - item_discount_perc) / 100.0
+			if item_discount_num:
+				line_total = line_total - item_discount_num
+
+			cur.execute("""
 				INSERT INTO cart_items (sale_id, item_id, item_count, item_discount_perc, item_discount_num, item_total)
 				VALUES (?, ?, ?, ?, ?, ?)
-				""", (sale_id, item_id, item_count, item_discount_perc, item_discount_num, self.item_total * item_count))
+			""", (sale_id, item_id, item_count, item_discount_perc, item_discount_num, line_total * item_count))
 			self.conn.commit()
 			return True
 		except Exception as e:
@@ -144,25 +146,101 @@ class DatabaseManager:
 			self.conn.rollback()
 			return False
 
+	def apply_discounts(self, sale_id):
+		"""
+		Recalculate discounts row-by-row from base price (item_price * count),
+		write item_discount_* and item_total (net), then update sales.* totals.
+		"""
+		try:
+			cur = self.conn.cursor()
+
+			# 1) Recompute each cart row from base values so discounts don’t compound
+			cur.execute("""
+				SELECT ci.item_id, ci.item_count, i.item_price
+				FROM cart_items ci
+				JOIN items i ON i.item_id = ci.item_id
+				WHERE ci.sale_id = ?
+			""", (sale_id,))
+			rows = cur.fetchall()
+
+			for item_id, item_count, item_price in rows:
+				base_total = (item_price or 0) * (item_count or 0)
+
+				# fetch best (or only) campaign; if you may have many, pick the best here
+				cur.execute("""
+					SELECT disc_type, disc_val, min_quan
+					FROM campaigns
+					WHERE item_id = ?
+					AND min_quan <= ?
+					ORDER BY min_quan DESC
+					LIMIT 1
+				""", (item_id, item_count))
+				camp = cur.fetchone()
+
+				discount_num = 0.0
+				discount_perc = 0.0
+				if camp and item_count >= camp["min_quan"]:
+					if camp["disc_type"] == "percent":
+						discount_num = base_total * (camp["disc_val"] / 100.0)
+						discount_perc = camp["disc_val"]
+					elif camp["disc_type"] == "fixed":
+						discount_num = min(base_total, camp["disc_val"])  # don’t go negative
+						discount_perc = (discount_num / base_total * 100.0) if base_total > 0 else 0.0
+
+				new_total = max(0.0, base_total - discount_num)
+
+				cur.execute("""
+					UPDATE cart_items
+					SET item_discount_perc = ?,
+						item_discount_num  = ?,
+						item_total         = ?
+					WHERE sale_id = ? AND item_id = ?
+				""", (discount_perc, discount_num, new_total, sale_id, item_id))
+
+			# 2) Write aggregated totals into sales so your "İNDİRİM:" label reflects reality
+			cur.execute("""
+				SELECT COALESCE(SUM(item_discount_num), 0.0),
+					COALESCE(SUM(item_total), 0.0)
+				FROM cart_items
+				WHERE sale_id = ?
+			""", (sale_id,))
+			disc_sum, total_sum = cur.fetchone() or (0.0, 0.0)
+
+			cur.execute("""
+				UPDATE sales
+				SET total_discount_num = ?,
+					total_amount       = ?
+				WHERE sale_id = ?
+			""", (disc_sum, total_sum, sale_id))
+
+			self.conn.commit()
+		except Exception as e:
+			print(f"ERROR   : Applying discounts: {e}")
+			self.conn.rollback()
+
+
 	def get_cart_items(self, sale_id):
-			try:
-				cursor = self.conn.cursor()
-				cursor.execute("""
-					SELECT
-						ci.item_count,
-						i.item_name,
-						ci.item_discount_perc,
-						ci.item_discount_num,
-						ci.item_total
-					FROM cart_items AS ci
-					JOIN items AS i ON ci.item_id = i.item_id
-					WHERE ci.sale_id = ?
-				""", (sale_id, ))
-				cart_items = cursor.fetchall()
-				return cart_items
-			except Exception as e:
-				print(f"ERROR   : Fetching cart items: {e}")
-				return []
+		try:
+			# Apply first, then fetch
+			self.apply_discounts(sale_id)
+
+			cursor = self.conn.cursor()
+			cursor.execute("""
+				SELECT
+					ci.item_count,
+					i.item_name,
+					ci.item_discount_perc,
+					ci.item_discount_num,
+					ci.item_total
+				FROM cart_items AS ci
+				JOIN items  AS i  ON ci.item_id = i.item_id
+				WHERE ci.sale_id = ?
+			""", (sale_id,))
+			return cursor.fetchall()
+		except Exception as e:
+			print(f"ERROR   : Fetching cart items: {e}")
+			return []
+
 
 	def remove_item_from_cart(self, sale_id, i):
 		try:
