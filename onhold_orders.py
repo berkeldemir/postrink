@@ -1,21 +1,18 @@
 from PySide6.QtWidgets import (
-	QWidget, QVBoxLayout, QPushButton,
-	QLabel, QHBoxLayout, QStackedWidget
+    QWidget, QVBoxLayout, QPushButton,
+    QLabel, QHBoxLayout, QStackedWidget
 )
 from PySide6.QtCore import Qt, Signal
 
-class SalesScreen(QWidget):
-	"""
-	A placeholder screen for the 'Satışları Görüntüle' view.
-	"""
+class OnHoldOrdersScreen(QWidget):
 	back_to_menu = Signal()
 
-	def __init__(self, parent=None):
+	def __init__(self, app_data):
 		super().__init__(parent)
 		layout = QVBoxLayout()
 		layout.setAlignment(Qt.AlignCenter)
 
-		title = QLabel("Satışlar Ekranı:")
+		title = QLabel("Askıdaki İşlemler:")
 		title.setStyleSheet("""
 			font-size: 72px;
 			font-weight: bold;
@@ -47,20 +44,3 @@ class SalesScreen(QWidget):
 
 		self.back_button = back_button
 		self.back_button.clicked.connect(self.back_to_menu.emit)
-
-class WelcomeScreen(QWidget):
-	"""
-	A simple welcome screen for the customer display.
-	"""
-	def __init__(self):
-		super().__init__()
-		layout = QVBoxLayout()
-		label = QLabel("Hoş geldiniz!")
-		label.setAlignment(Qt.AlignCenter)
-		label.setStyleSheet("""
-			font-size: 72px;
-			font-weight: bold;
-			color: #999;
-		""")
-		layout.addWidget(label)
-		self.setLayout(layout)

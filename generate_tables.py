@@ -30,7 +30,7 @@ def create_tables(db_name='database.db'):
         # Note: SQLite's TEXT storage class is used for the fixed-size string.
         create_sales_table = """
         CREATE TABLE IF NOT EXISTS sales (
-            sale_id TEXT PRIMARY KEY NOT NULL CHECK(LENGTH(sale_id) = 15),
+            sale_id TEXT PRIMARY KEY NOT NULL CHECK(LENGTH(sale_id) <= 15),
             sale_date TEXT NOT NULL,
             customer_name TEXT NOT NULL CHECK(LENGTH(customer_name) <= 32),
             total_discount_perc INTEGER NOT NULL CHECK(total_discount_perc >= 0 AND total_discount_perc <= 100),
@@ -45,14 +45,14 @@ def create_tables(db_name='database.db'):
         # This table links sales and items using foreign keys.
         create_cart_items_table = """
         CREATE TABLE IF NOT EXISTS cart_items (
+            cart_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
             sale_id TEXT NOT NULL,
             item_id INTEGER NOT NULL,
-            item_count REAL NOT NULL CHECK(item_count > 0),
+            item_count INTEGER NOT NULL CHECK(item_count > 0),
             item_discount_perc INTEGER NOT NULL CHECK(item_discount_perc >= 0 AND item_discount_perc <= 100),
             item_discount_num REAL NOT NULL,
             item_total REAL NOT NULL,
             
-            PRIMARY KEY (sale_id, item_id),
             FOREIGN KEY (sale_id) REFERENCES sales(sale_id) ON DELETE CASCADE,
             FOREIGN KEY (item_id) REFERENCES items(item_id) ON DELETE CASCADE
         );

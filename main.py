@@ -6,13 +6,11 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 from PySide6.QtCore import Qt, Signal
-import random # Used for mocking a sale ID
-import time # Used for mocking a sale ID
+import random 
+import time
 
-# Import shared data from its own module
 from data import AppData, DatabaseManager
 
-# Import screen modules
 from new_sale import NewSaleScreen, CartScreen, CustomerCartScreen
 from view_sales import SalesScreen, WelcomeScreen
 from edit_stock import EditStockScreen
@@ -25,10 +23,8 @@ class Window1(QMainWindow):
         super().__init__()
         self.setWindowTitle("Main Window")
         self.controller = controller
-        # Store a reference to the second window to control it
         self.second_window = second_window
 
-        # Use a QStackedWidget to manage different views
         self.stacked_widget = QStackedWidget()
         self.setCentralWidget(self.stacked_widget)
 
@@ -41,39 +37,42 @@ class Window1(QMainWindow):
             }
         """)
         
-        # --- Main Menu Screen ---
         self.main_menu_widget = self._create_main_menu()
-        self.stacked_widget.addWidget(self.main_menu_widget) # Index 0
+        self.stacked_widget.addWidget(self.main_menu_widget)
         
-        # --- Other Screens ---
         self.new_sale_screen = NewSaleScreen()
-        self.stacked_widget.addWidget(self.new_sale_screen) # Index 1
+        self.stacked_widget.addWidget(self.new_sale_screen)
         
         self.sales_screen = SalesScreen()
-        self.stacked_widget.addWidget(self.sales_screen) # Index 2
+        self.stacked_widget.addWidget(self.sales_screen)
         
         self.cart_screen = CartScreen()
-        self.stacked_widget.addWidget(self.cart_screen) # Index 3
+        self.stacked_widget.addWidget(self.cart_screen)
 
         self.edit_stock_screen = EditStockScreen()
-        self.stacked_widget.addWidget(self.edit_stock_screen) # Index 4
+        self.stacked_widget.addWidget(self.edit_stock_screen)
         
-        # --- Connect signals to screen-switching slots ---
         self.new_sale_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
         self.sales_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
         self.stock_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(4))
         self.quit_button.clicked.connect(QApplication.instance().quit)
         
-        # Connections for NewSaleScreen
         self.new_sale_screen.back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.new_sale_screen.next_button.clicked.connect(self.start_sale_and_show_cart)
 
-        # Connections for other screens
         self.sales_screen.back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.cart_screen.back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+        self.cart_screen.cancel_button.clicked.connect(self.handle_cancel)
+        self.cart_screen.cancel_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.edit_stock_screen.back_button_clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
 
+        # Connect the cart screen's item_added signal to the customer display update
+        self.cart_screen.item_added.connect(self.second_window.show_cart)
+
         self.showFullScreen()
+
+    def handle_cancel(self):
+        self.controller.database_manager.remove_cart_of_sale(self.controller.curr_sale_id)
         
     def _create_main_menu(self):
         main_menu_widget = QWidget()
@@ -198,31 +197,40 @@ class Window1(QMainWindow):
         Starts a new sale, stores the customer name and sale ID,
         and then shows the cart screen.
         """
-        # Get the customer name from the input field
         customer_name = self.new_sale_screen.name_input.text().strip()
         
-        # Perform validation FIRST.
-        #if not customer_name:
-        #    msg_box = QMessageBox()
-        #    msg_box.setWindowTitle("Hata")
-        #    msg_box.setText("Lütfen müşteri adını girin.")
-        #    msg_box.setIcon(QMessageBox.Warning)
-        #    msg_box.exec()
-        #    return # Exit the function if validation fails
+        if not customer_name:
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("Hata")
+            msg_box.setText("Lütfen müşteri adını girin.")
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.exec()
+            return
 
-        # ONLY if validation passes, proceed with updates
-        # 1. Update the shared AppData object
         self.controller.curr_customer_name = customer_name
-        self.controller.curr_sale_id = self.controller.db.start_new_sale()
+        self.controller.curr_sale_id = self.controller.database_manager.start_new_sale(customer_name)
 
-        # 2. Refresh the cashier's cart screen with the new data
+        # Refresh both the employee and customer cart screens when a new sale starts
         self.cart_screen.refresh_data(self.controller)
-        
-        # 3. Switch the cashier's screen to the cart screen
         self.stacked_widget.setCurrentIndex(3)
-
-        # 4. Refresh the customer screen with the new data and show the cart
         self.second_window.show_cart()
+
+    def continue_sale(self, selected_id):
+        try:
+            cursor = self.controller.database_manager.conn.cursor()
+            cursor.execute("""
+                SELECT customer_name FROM
+                sales
+                WHERE sale_id = ?
+            """, (selected_id, ))
+            cust_name = cursor.fetchone()
+            self.controller.curr_customer_name = cust_name[0]
+            self.controller.curr_sale_id = selected_id
+            self.cart_screen.refresh_data(self.controller)
+            self.stacked_widget.setCurrentIndex(3)
+            self.second_window.show_cart()
+        except Error as e:
+            print(f"ERROR   : {e}")
 
 class Window2(QMainWindow):
     """
@@ -238,11 +246,11 @@ class Window2(QMainWindow):
         self.setStyleSheet("background-color: #111;")
         
         self.welcome_screen = WelcomeScreen()
-        self.stacked_widget.addWidget(self.welcome_screen) #0
+        self.stacked_widget.addWidget(self.welcome_screen)
         
         from new_sale import CustomerCartScreen
-        self.customer_cart_screen = CustomerCartScreen()
-        self.stacked_widget.addWidget(self.customer_cart_screen) #1
+        self.customer_cart_screen = CustomerCartScreen(controller)
+        self.stacked_widget.addWidget(self.customer_cart_screen)
 
         self.showFullScreen()
     
@@ -250,6 +258,7 @@ class Window2(QMainWindow):
         self.stacked_widget.setCurrentIndex(0)
 
     def show_cart(self):
+        # This method is now called whenever the main cart is updated
         self.customer_cart_screen.refresh_data(self.controller)
         self.stacked_widget.setCurrentIndex(1)
         
