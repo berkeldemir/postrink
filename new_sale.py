@@ -212,10 +212,49 @@ class CartScreen(QWidget):
 				background-color: #34495e;
 			}
 		""")
+		self.cash_button = QPushButton("Nakit")
+		self.cash_button.setStyleSheet("""
+			QPushButton {
+				background-color: #2c3e50;
+				color: white;
+				font-size: 48px;
+				font-weight: bold;
+				padding: 20px;
+				border-radius: 10px;
+				width: 450px;
+				height: 80px;
+				border: 2px solid white;
+			}
+			QPushButton:hover {
+				background-color: #34495e;
+			}
+		""")
+		self.iban_button = QPushButton("IBAN")
+		self.iban_button.setStyleSheet("""
+			QPushButton {
+				background-color: #2c3e50;
+				color: white;
+				font-size: 48px;
+				font-weight: bold;
+				padding: 20px;
+				border-radius: 10px;
+				width: 450px;
+				height: 80px;
+				border: 2px solid white;
+			}
+			QPushButton:hover {
+				background-color: #34495e;
+			}
+		""")
 		self.back_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 		buttons_layout.addWidget(self.back_button, alignment=Qt.AlignCenter)
 		self.cancel_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 		buttons_layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
+		self.cash_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+		buttons_layout.addWidget(self.cash_button, alignment=Qt.AlignCenter)
+		self.iban_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+		buttons_layout.addWidget(self.iban_button, alignment=Qt.AlignCenter)
+		
 		buttons_layout.addStretch(1)
 
 		# Add the three sub-layouts to the main content layout
@@ -310,7 +349,7 @@ class CartScreen(QWidget):
 
 	def handle_product_click(self, item_id, app_data:AppData):
 		# Call the database method and check if successful
-		if app_data.database_manager.add_item_to_cart(app_data.curr_sale_id, item_id, 2, 0, 0):
+		if app_data.database_manager.add_item_to_cart(app_data.curr_sale_id, item_id, 1, 0, 0):
 			# If successful, refresh the cart on this screen
 			self.refresh_cart_items(app_data)
 			# Emit a signal to tell other parts of the app to also refresh
@@ -364,6 +403,7 @@ class CartScreen(QWidget):
 			item_row_layout.addWidget(item_price_lbl)
 			
 			self.cart_items_layout.addWidget(item_row_widget)
+
 		item_row_widget = QWidget()
 		item_row_widget.setStyleSheet("""
 			QWidget {
@@ -376,51 +416,50 @@ class CartScreen(QWidget):
 			}
 		""")
 
-		item_row_layout = QHBoxLayout(item_row_widget)
-		item_row_layout.setContentsMargins(5, 5, 5, 5)
+		# --- disc row ---
+		disc_row = QWidget()
+		disc_row.setStyleSheet("""
+			QWidget {
+				background-color: #3e502c;
+				margin: 0px 0px 0px 0px;
+				color: white;
+				border: .3px solid white;
+				border-radius: 5px;
+				margin-bottom: 5px;
+			}
+		""")
+		disc_layout = QHBoxLayout(disc_row)
+		disc_layout.setContentsMargins(5, 5, 5, 5)
 
-		item_number_lbl = QLabel(f"")
-		item_number_lbl.setStyleSheet("font-size: 28px; font-weight: bold; min-width: 42px;")
-		item_number_lbl.setAlignment(Qt.AlignLeft)
+		disc_layout.addWidget(QLabel(""), 0)
+		disc_label = QLabel("İNDİRİM:")
+		disc_label.setStyleSheet("font-size: 28px;")
+		disc_layout.addWidget(disc_label, 1)
 
-		item_name_lbl = QLabel(f"İNDİRİM:")
-		item_name_lbl.setStyleSheet("font-size: 28px;")
-		item_name_lbl.setAlignment(Qt.AlignLeft)
+		discount = app_data.database_manager.total_discount_num(app_data.curr_sale_id)
+		disc_price = QLabel(f"{discount} TL")
+		disc_price.setStyleSheet("font-size: 28px; font-weight: bold; min-width: 64px;")
+		disc_layout.addWidget(disc_price)
 
-		total_discount_num = app_data.database_manager.total_discount_num(app_data.curr_sale_id)
-		item_disc_lbl = QLabel(f"{total_discount_num} TL")
-		item_disc_lbl.setStyleSheet("font-size: 28px; font-weight: bold; min-width: 64px;")
-		item_disc_lbl.setAlignment(Qt.AlignRight)
+		self.cart_items_layout.addWidget(disc_row)
 
-		item_row_layout.addWidget(item_number_lbl)
-		item_row_layout.addSpacing(10)
-		item_row_layout.addWidget(item_name_lbl, 1) # Set stretch to expand
-		item_row_layout.addWidget(item_disc_lbl)
-		
-		self.cart_items_layout.addWidget(item_row_widget)
+		# --- TOTAL row ---
+		total_row = QWidget()
+		total_row.setStyleSheet(disc_row.styleSheet())
+		total_layout = QHBoxLayout(total_row)
+		total_layout.setContentsMargins(5, 5, 5, 5)
 
-		item_row_layout = QHBoxLayout(item_row_widget)
-		item_row_layout.setContentsMargins(5, 5, 5, 5)
-
-		item_number_lbl = QLabel(f"")
-		item_number_lbl.setStyleSheet("font-size: 28px; font-weight: bold; min-width: 42px;")
-		item_number_lbl.setAlignment(Qt.AlignLeft)
-
-		item_name_lbl = QLabel(f"TOTAL:")
-		item_name_lbl.setStyleSheet("font-size: 28px;")
-		item_name_lbl.setAlignment(Qt.AlignLeft)
+		total_layout.addWidget(QLabel(""), 0)
+		total_label = QLabel("TOTAL:")
+		total_label.setStyleSheet("font-size: 28px;")
+		total_layout.addWidget(total_label, 1)
 
 		total_amount = app_data.database_manager.total_amount_calculator(app_data.curr_sale_id)
-		item_price_lbl = QLabel(f"{total_amount} TL")
-		item_price_lbl.setStyleSheet("font-size: 28px; font-weight: bold; min-width: 64px;")
-		item_price_lbl.setAlignment(Qt.AlignRight)
+		total_price = QLabel(f"{total_amount} TL")
+		total_price.setStyleSheet("font-size: 28px; font-weight: bold; min-width: 64px;")
+		total_layout.addWidget(total_price)
 
-		item_row_layout.addWidget(item_number_lbl)
-		item_row_layout.addSpacing(10)
-		item_row_layout.addWidget(item_name_lbl, 1) # Set stretch to expand
-		item_row_layout.addWidget(item_price_lbl)
-		
-		self.cart_items_layout.addWidget(item_row_widget)
+		self.cart_items_layout.addWidget(total_row)
 
 class CustomerCartScreen(QWidget):
 	"""
@@ -539,3 +578,56 @@ class CustomerCartScreen(QWidget):
 			item_row_layout.addWidget(item_price_lbl)
 			
 			self.cart_layout.addWidget(item_row_widget)
+		# --- Discount row ---
+		disc_row = QWidget()
+		disc_row.setStyleSheet("""
+			QWidget {
+				background-color: #3e502c;
+				color: white;
+				border: .3px solid white;
+				border-radius: 5px;
+				margin-bottom: 5px;
+			}
+		""")
+		disc_layout = QHBoxLayout(disc_row)
+		disc_layout.setContentsMargins(10, 5, 10, 5)
+
+		disc_label = QLabel("İNDİRİM:")
+		disc_label.setStyleSheet("font-size: 48px;")
+		disc_layout.addWidget(disc_label, 1)
+
+		discount = app_data.database_manager.total_discount_num(app_data.curr_sale_id)
+		disc_price = QLabel(f"{discount} TL")
+		disc_price.setStyleSheet("font-size: 48px; font-weight: bold; min-width: 96px;")
+		disc_price.setAlignment(Qt.AlignRight)
+		disc_layout.addWidget(disc_price)
+
+		self.cart_layout.addWidget(disc_row)
+
+		# --- Total row ---
+		total_row = QWidget()
+		total_row.setStyleSheet("""
+			QWidget {
+				background-color: #3e502c;
+				color: white;
+				border: .3px solid white;
+				border-radius: 5px;
+				margin-bottom: 5px;
+			}
+		""")
+		total_layout = QHBoxLayout(total_row)
+		total_layout.setContentsMargins(10, 5, 10, 5)
+
+		total_label = QLabel("TOTAL:")
+		total_label.setStyleSheet("font-size: 48px;")
+		total_layout.addWidget(total_label, 1)
+
+		total_amount = app_data.database_manager.total_amount_calculator(app_data.curr_sale_id)
+		total_price = QLabel(f"{total_amount} TL")
+		total_price.setStyleSheet("font-size: 48px; font-weight: bold; min-width: 96px;")
+		total_price.setAlignment(Qt.AlignRight)
+		total_layout.addWidget(total_price)
+
+		self.cart_layout.addWidget(total_row)
+		scroll_bar = self.cart_scroll_area.verticalScrollBar()
+		scroll_bar.setValue(scroll_bar.maximum() + 50)

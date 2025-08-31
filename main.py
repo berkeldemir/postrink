@@ -63,7 +63,7 @@ class Window1(QMainWindow):
         self.sales_screen.back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.cart_screen.back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.cart_screen.cancel_button.clicked.connect(self.handle_cancel)
-        self.cart_screen.cancel_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+        #self.cart_screen.cancel_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         self.edit_stock_screen.back_button_clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
 
         # Connect the cart screen's item_added signal to the customer display update
@@ -73,6 +73,7 @@ class Window1(QMainWindow):
 
     def handle_cancel(self):
         self.controller.database_manager.remove_cart_of_sale(self.controller.curr_sale_id)
+        self.stacked_widget.setCurrentIndex(0)
         
     def _create_main_menu(self):
         main_menu_widget = QWidget()

@@ -90,15 +90,36 @@ class DatabaseManager:
 				SELECT total_discount_num
 				FROM sales
 				WHERE sale_id = ?
-			""", (sale_id, ))
-			return (cursor.fetchall()[0])
+			""", (sale_id,))
+			row = cursor.fetchone()
+			return row[0] if row else 0
 		except Exception as e:
 			print(f"ERROR   : {e}")
 			self.conn.rollback()
-			return (0)
+			return 0
 
 	def add_item_to_cart(self, sale_id, item_id, item_count, item_discount_perc, item_discount_num):
 		try:
+			cursor_already_exist = self.conn.cursor()
+			cursor_already_exist.execute("""
+				SELECT ci.item_count,
+					ci.item_total,
+					i.item_price
+				FROM cart_items ci
+				JOIN items i ON ci.item_id = i.item_id
+				WHERE ci.sale_id = ? AND ci.item_id = ?;
+			""", (sale_id, item_id, ))
+			already_exist = cursor_already_exist.fetchone()
+			if already_exist:
+				cursor_update_count = self.conn.cursor()
+				cursor_update_count.execute("""
+					UPDATE cart_items
+					SET item_count = ?,
+						item_total = ?
+					WHERE sale_id = ? AND item_id = ?
+				""", (already_exist[0] + item_count, (already_exist[1] + (item_count * already_exist[2])), sale_id, item_id, ))
+				return True
+
 			cursor_total = self.conn.cursor()
 			cursor_total.execute("""SELECT item_price FROM items WHERE item_id = ?""", (item_id, ))
 			item_price_tuple = cursor_total.fetchone()
@@ -184,6 +205,27 @@ class DatabaseManager:
 			return (cursor.fetchall())
 		except Exception as e:
 			print(f"ERROR   : Getting onhold orders' list: {e}")
+
+	def calculate_cart_discount(self, sale_id):
+		try:
+			cursor = self.conn.cursor()
+			cursor.execute("""
+				SELECT item_id, item_count
+				FROM cart_items
+				WHERE sale_id = ?
+			""", (sale_id,))
+			
+			cart_items = cursor.fetchall()
+			total_discount = 0
+			
+			for item_id, count in cart_items:
+				discount = self.get_applicable_discount(item_id, count)
+				total_discount += discount
+			
+			return total_discount
+		except Exception as e:
+			print(f"ERROR in calculate_cart_discount: {e}")
+			return 0
 
 class AppData:
 	def __init__(self):
