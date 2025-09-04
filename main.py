@@ -1,9 +1,11 @@
+### main.py
+
 import sys
 from PySide6.QtWidgets import (
 	QApplication, QMainWindow, QWidget,
 	QVBoxLayout, QPushButton, QLabel,
 	QHBoxLayout, QStackedWidget, QLineEdit,
-	QMessageBox
+	QMessageBox, QInputDialog
 )
 from PySide6.QtCore import Qt, Signal
 import random 
@@ -14,6 +16,7 @@ from data import AppData, DatabaseManager
 from new_sale import NewSaleScreen, CartScreen, CustomerCartScreen
 from view_sales import SalesScreen, WelcomeScreen
 from edit_stock import EditStockScreen
+from onhold_orders import OnHoldOrdersScreen
 
 class Window1(QMainWindow):
 	"""
@@ -51,10 +54,17 @@ class Window1(QMainWindow):
 
 		self.edit_stock_screen = EditStockScreen()
 		self.stacked_widget.addWidget(self.edit_stock_screen)
+
+		self.onhold_screen = OnHoldOrdersScreen(controller)
+		self.stacked_widget.addWidget(self.onhold_screen)
 		
 		self.new_sale_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
 		self.sales_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
 		self.stock_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(4))
+		self.onhold_button.clicked.connect(lambda: [
+			self.onhold_screen.refresh_onhold_sales(),
+			self.stacked_widget.setCurrentIndex(5)
+		])
 		self.quit_button.clicked.connect(QApplication.instance().quit)
 		
 		self.new_sale_screen.back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
@@ -62,6 +72,8 @@ class Window1(QMainWindow):
 
 		self.sales_screen.back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
 		self.cart_screen.back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+		self.onhold_screen.back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+		self.onhold_screen.continue_sale.connect(self.continue_sale)
 		self.cart_screen.cancel_button.clicked.connect(self.handle_cancel)
 		#self.cart_screen.cancel_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
 		self.edit_stock_screen.back_button_clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
@@ -69,7 +81,34 @@ class Window1(QMainWindow):
 		# Connect the cart screen's item_added signal to the customer display update
 		self.cart_screen.item_added.connect(self.second_window.show_cart)
 
+		# Connect the new payment buttons to their handlers
+		self.cart_screen.cash_button.clicked.connect(self.handle_cash_payment)
+		self.cart_screen.iban_button.clicked.connect(self.handle_iban_payment)
+
 		self.showFullScreen()
+
+	def handle_cash_payment(self):
+		"""Handles the cash payment and completes the sale."""
+		if self.controller.curr_sale_id:
+			self.controller.database_manager.update_sale_payment_info(self.controller.curr_sale_id, "Nakit")
+			self.stacked_widget.setCurrentIndex(0)
+			self.second_window.show_welcome()
+
+	def handle_iban_payment(self):
+		"""Handles the IBAN payment and gets sender info."""
+		if self.controller.curr_sale_id:
+			sender_name, ok = QInputDialog.getText(self, "IBAN Bilgisi", "Göndericinin Adı:")
+			if ok and sender_name:
+				self.controller.database_manager.update_sale_payment_info(self.controller.curr_sale_id, "IBAN", sender_name)
+				self.stacked_widget.setCurrentIndex(0)
+				self.second_window.show_welcome()
+			else:
+				# Handle the case where the user cancels the input or enters nothing
+				msg_box = QMessageBox()
+				msg_box.setWindowTitle("Uyarı")
+				msg_box.setText("IBAN işlemi iptal edildi veya gönderici adı girilmedi.")
+				msg_box.setIcon(QMessageBox.Warning)
+				msg_box.exec()
 
 	def handle_cancel(self):
 		self.controller.database_manager.remove_cart_of_sale(self.controller.curr_sale_id)
@@ -84,7 +123,7 @@ class Window1(QMainWindow):
 		self.new_sale_button = QPushButton("Yeni Satış")
 		self.sales_button = QPushButton("Satışlar")
 		self.stock_button = QPushButton("Stoklar")
-		self.campaign_button = QPushButton("Kampanyalar")
+		self.onhold_button = QPushButton("Askıdakiler")
 		self.quit_button = QPushButton("Çıkış")
 		
 		new_sale_style = """
@@ -137,7 +176,7 @@ class Window1(QMainWindow):
 				border: 5px solid #999;
 			}
 		"""
-		campaign_style = """
+		onhold_style = """
 			QPushButton {
 				background-color: #C27D0E; 
 				border: 2px solid #c0392b; 
@@ -174,20 +213,20 @@ class Window1(QMainWindow):
 		self.new_sale_button.setStyleSheet(new_sale_style)
 		self.sales_button.setStyleSheet(sales_style)
 		self.stock_button.setStyleSheet(stock_style)
-		self.campaign_button.setStyleSheet(campaign_style)
+		self.onhold_button.setStyleSheet(onhold_style)
 		self.quit_button.setStyleSheet(quit_style)
 
 		self.new_sale_button.setShortcut("n")
 		self.sales_button.setShortcut("v")
 		self.stock_button.setShortcut("s")
-		self.campaign_button.setShortcut("c")
+		self.onhold_button.setShortcut("o")
 		self.quit_button.setShortcut("q")
 
 		main_menu_layout.addStretch()
 		main_menu_layout.addWidget(self.new_sale_button)
 		main_menu_layout.addWidget(self.sales_button)
 		main_menu_layout.addWidget(self.stock_button)
-		main_menu_layout.addWidget(self.campaign_button)
+		main_menu_layout.addWidget(self.onhold_button)
 		main_menu_layout.addWidget(self.quit_button)
 		main_menu_layout.addStretch()
 		
@@ -226,12 +265,17 @@ class Window1(QMainWindow):
 				WHERE sale_id = ?
 			""", (selected_id, ))
 			cust_name = cursor.fetchone()
+			if cust_name:
+				self.controller.curr_customer_name = cust_name[0]
+			else:
+				print(f"Sale {selected_id} not found in sales table!")
+				return
 			self.controller.curr_customer_name = cust_name[0]
 			self.controller.curr_sale_id = selected_id
 			self.cart_screen.refresh_data(self.controller)
 			self.stacked_widget.setCurrentIndex(3)
 			self.second_window.show_cart()
-		except Error as e:
+		except Exception as e:
 			print(f"ERROR   : {e}")
 
 class Window2(QMainWindow):

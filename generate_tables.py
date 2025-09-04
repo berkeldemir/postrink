@@ -21,7 +21,7 @@ def create_tables(db_name='database.db'):
         CREATE TABLE IF NOT EXISTS items (
             item_id INTEGER PRIMARY KEY,
             item_name TEXT NOT NULL CHECK(LENGTH(item_name) <= 32),
-            item_price REAL NOT NULL CHECK(item_price >= 0),
+            item_price REAL NOT NULL,
             item_stock INTEGER NOT NULL CHECK(item_stock >= 0)
         );
         """

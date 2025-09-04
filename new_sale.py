@@ -1,3 +1,5 @@
+### new_sale.py
+
 from PySide6.QtWidgets import (
 	QWidget, QVBoxLayout, QPushButton,
 	QLabel, QHBoxLayout, QLineEdit,
@@ -476,7 +478,7 @@ class CustomerCartScreen(QWidget):
 		info_layout = QHBoxLayout()
 		info_layout.setAlignment(Qt.AlignTop)
 
-		self.customer_label = QLabel("Hoş geldiniz, ")
+		self.customer_label = QLabel("TR48 0001 0026 6374 3879 0650 01")
 		self.date_time_label = QLabel("-")
 
 		label_style = """
@@ -578,31 +580,6 @@ class CustomerCartScreen(QWidget):
 			item_row_layout.addWidget(item_price_lbl)
 			
 			self.cart_layout.addWidget(item_row_widget)
-		# --- Discount row ---
-		disc_row = QWidget()
-		disc_row.setStyleSheet("""
-			QWidget {
-				background-color: #3e502c;
-				color: white;
-				border: .3px solid white;
-				border-radius: 5px;
-				margin-bottom: 5px;
-			}
-		""")
-		disc_layout = QHBoxLayout(disc_row)
-		disc_layout.setContentsMargins(10, 5, 10, 5)
-
-		disc_label = QLabel("İNDİRİM:")
-		disc_label.setStyleSheet("font-size: 48px;")
-		disc_layout.addWidget(disc_label, 1)
-
-		discount = app_data.database_manager.total_discount_num(app_data.curr_sale_id)
-		disc_price = QLabel(f"{discount} TL")
-		disc_price.setStyleSheet("font-size: 48px; font-weight: bold; min-width: 96px;")
-		disc_price.setAlignment(Qt.AlignRight)
-		disc_layout.addWidget(disc_price)
-
-		self.cart_layout.addWidget(disc_row)
 
 		# --- Total row ---
 		total_row = QWidget()
